@@ -1,11 +1,21 @@
-const CACHE_NAME = "simpledrop-v1";
+const CACHE_NAME = "simpledrop-v2";
 const OFFLINE_URL = "offline.html";
 const PRECACHE_URLS = [
-  "./",
   "index.html",
   "offline.html",
   "manifest.json"
 ];
+
+async function stripRedirect(response) {
+  if (!response) return response;
+  if (!response.redirected) return response;
+  const body = await response.blob();
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  });
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -27,9 +37,9 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() =>
-        caches.open(CACHE_NAME).then((cache) => cache.match(OFFLINE_URL))
-      )
+      fetch(request)
+        .then(stripRedirect)
+        .catch(() => caches.open(CACHE_NAME).then((cache) => cache.match(OFFLINE_URL)))
     );
     return;
   }
@@ -37,7 +47,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
-      return fetch(request).catch(() => cached);
+      return fetch(request).then(stripRedirect).catch(() => cached);
     })
   );
 });

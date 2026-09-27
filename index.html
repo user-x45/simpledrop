@@ -386,10 +386,30 @@
     }
   }
 
-  #log {
+  #logWrap {
+    position: relative;
     flex-shrink: 0;
     max-width: 620px;
     margin: 0 auto;
+    width: 100%;
+  }
+
+  #logWrap::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 28px;
+    pointer-events: none;
+    z-index: 1;
+    backdrop-filter: blur(var(--log-blur, 6px));
+    -webkit-backdrop-filter: blur(var(--log-blur, 6px));
+    mask-image: linear-gradient(to bottom, black, transparent);
+    -webkit-mask-image: linear-gradient(to bottom, black, transparent);
+  }
+
+  #log {
     width: 100%;
     max-height: 200px;
     overflow-y: auto;
@@ -975,7 +995,7 @@
   </div>
 </main>
 
-<div id="log"></div>
+<div id="logWrap"><div id="log"></div></div>
 
 <div class="alert-overlay" id="alertOverlay" role="alertdialog" aria-modal="true" aria-labelledby="alertFromName">
   <div class="alert-box">
@@ -1116,6 +1136,13 @@ youNameEl.addEventListener("click", () => {
 const field = document.getElementById("field");
 const emptyHint = document.getElementById("emptyHint");
 const logEl = document.getElementById("log");
+const logWrapEl = document.getElementById("logWrap");
+
+logEl.addEventListener("scroll", () => {
+  const fadeDistance = 60;
+  const ratio = Math.max(0, 1 - logEl.scrollTop / fadeDistance);
+  logWrapEl.style.setProperty("--log-blur", (ratio * 6).toFixed(2) + "px");
+});
 const qrBtn = document.getElementById("qrBtn");
 const qrOverlay = document.getElementById("qrOverlay");
 const qrClose = document.getElementById("qrClose");

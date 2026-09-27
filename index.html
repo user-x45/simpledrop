@@ -411,6 +411,7 @@
   }
 
   .transfer-card {
+    position: relative;
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 14px;
@@ -420,6 +421,29 @@
     gap: 12px;
     flex-shrink: 0;
     animation: fade-in 0.4s ease;
+  }
+
+  .transfer-close {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    color: var(--sub);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .transfer-close:hover {
+    color: var(--text);
+    border-color: var(--accent-dim);
   }
 
   .transfer-icon {
@@ -1302,10 +1326,12 @@ function closeAllConnections() {
     if (conn.incoming) {
       markCardFailed(conn.incoming.card, `${conn.peerName}との接続が切断されました`);
       conn.incoming = null;
+      decActiveTransfers();
     }
     if (conn.outgoing) {
       markCardFailed(conn.outgoing.card, `${conn.peerName}との接続が切断されました`);
       conn.outgoing = null;
+      decActiveTransfers();
     }
     try {
       conn.pc.close();
@@ -1890,6 +1916,7 @@ function beginSending(entry, file, card) {
       entry.outgoing = null;
       decActiveTransfers();
       card.querySelector(".fmeta").textContent = "送信完了";
+      addCloseButton(card);
     }
   });
 
@@ -1997,6 +2024,7 @@ function markCardFailed(card, message) {
     i.className = "fa-solid fa-triangle-exclamation";
     icon.appendChild(i);
   }
+  addCloseButton(card);
 }
 
 function finalizeIncoming(inc, peerName) {
@@ -2018,6 +2046,7 @@ function finalizeIncoming(inc, peerName) {
     document.body.appendChild(a);
     a.click();
     a.remove();
+    addCloseButton(card);
   });
   card.appendChild(dlBtn);
 }
@@ -2270,6 +2299,16 @@ function createTransferCard(name, size, statusLabel, withProgress, mime) {
   `;
   logEl.prepend(card);
   return card;
+}
+
+function addCloseButton(card) {
+  if (card.querySelector(".transfer-close")) return;
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "transfer-close";
+  closeBtn.setAttribute("aria-label", "閉じる");
+  closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+  closeBtn.addEventListener("click", () => card.remove());
+  card.appendChild(closeBtn);
 }
 
 function escapeHtml(str) {

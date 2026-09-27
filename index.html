@@ -1159,6 +1159,7 @@ function bindSheetSwipeToClose(handleEl, sheetEl, closeFn) {
   const overlayEl = sheetEl.closest(".overlay");
   const maxDelta = 240;
   const baseBlur = overlayEl ? parseFloat(getComputedStyle(overlayEl).backdropFilter.replace(/[^0-9.]/g, "")) || 6 : 6;
+  const baseScrimAlpha = 0.72;
 
   function onStart(clientY) {
     if (isDesktop()) return;
@@ -1179,6 +1180,8 @@ function bindSheetSwipeToClose(handleEl, sheetEl, closeFn) {
       const blur = baseBlur * (1 - ratio);
       overlayEl.style.backdropFilter = `blur(${blur}px)`;
       overlayEl.style.webkitBackdropFilter = `blur(${blur}px)`;
+      const scrimAlpha = baseScrimAlpha * (1 - ratio);
+      overlayEl.style.background = `rgba(var(--scrim-rgb), ${scrimAlpha})`;
     }
   }
 
@@ -1190,6 +1193,7 @@ function bindSheetSwipeToClose(handleEl, sheetEl, closeFn) {
       overlayEl.style.transition = "";
       overlayEl.style.backdropFilter = "";
       overlayEl.style.webkitBackdropFilter = "";
+      overlayEl.style.background = "";
     }
     const delta = Math.max(0, currentY - startY);
     sheetEl.style.transform = "";

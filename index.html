@@ -386,30 +386,10 @@
     }
   }
 
-  #logWrap {
-    position: relative;
+  #log {
     flex-shrink: 0;
     max-width: 620px;
     margin: 0 auto;
-    width: 100%;
-  }
-
-  #logWrap::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 28px;
-    pointer-events: none;
-    z-index: 1;
-    backdrop-filter: blur(var(--log-blur, 6px));
-    -webkit-backdrop-filter: blur(var(--log-blur, 6px));
-    mask-image: linear-gradient(to bottom, black, transparent);
-    -webkit-mask-image: linear-gradient(to bottom, black, transparent);
-  }
-
-  #log {
     width: 100%;
     max-height: 200px;
     overflow-y: auto;
@@ -995,7 +975,7 @@
   </div>
 </main>
 
-<div id="logWrap"><div id="log"></div></div>
+<div id="log"></div>
 
 <div class="alert-overlay" id="alertOverlay" role="alertdialog" aria-modal="true" aria-labelledby="alertFromName">
   <div class="alert-box">
@@ -1136,13 +1116,6 @@ youNameEl.addEventListener("click", () => {
 const field = document.getElementById("field");
 const emptyHint = document.getElementById("emptyHint");
 const logEl = document.getElementById("log");
-const logWrapEl = document.getElementById("logWrap");
-
-logEl.addEventListener("scroll", () => {
-  const fadeDistance = 60;
-  const ratio = Math.max(0, 1 - logEl.scrollTop / fadeDistance);
-  logWrapEl.style.setProperty("--log-blur", (ratio * 6).toFixed(2) + "px");
-});
 const qrBtn = document.getElementById("qrBtn");
 const qrOverlay = document.getElementById("qrOverlay");
 const qrClose = document.getElementById("qrClose");
@@ -1183,6 +1156,9 @@ function bindSheetSwipeToClose(handleEl, sheetEl, closeFn) {
   let dragging = false;
 
   const isDesktop = () => window.matchMedia("(min-width: 769px)").matches;
+  const overlayEl = sheetEl.closest(".overlay");
+  const maxDelta = 240;
+  const baseBlur = overlayEl ? parseFloat(getComputedStyle(overlayEl).backdropFilter.replace(/[^0-9.]/g, "")) || 6 : 6;
 
   function onStart(clientY) {
     if (isDesktop()) return;
@@ -1190,6 +1166,7 @@ function bindSheetSwipeToClose(handleEl, sheetEl, closeFn) {
     startY = clientY;
     currentY = clientY;
     sheetEl.style.transition = "none";
+    if (overlayEl) overlayEl.style.transition = "none";
   }
 
   function onMove(clientY) {
@@ -1197,12 +1174,23 @@ function bindSheetSwipeToClose(handleEl, sheetEl, closeFn) {
     currentY = clientY;
     const delta = Math.max(0, currentY - startY);
     sheetEl.style.transform = `translateY(${delta}px)`;
+    if (overlayEl) {
+      const ratio = Math.min(delta / maxDelta, 1);
+      const blur = baseBlur * (1 - ratio);
+      overlayEl.style.backdropFilter = `blur(${blur}px)`;
+      overlayEl.style.webkitBackdropFilter = `blur(${blur}px)`;
+    }
   }
 
   function onEnd() {
     if (!dragging) return;
     dragging = false;
     sheetEl.style.transition = "";
+    if (overlayEl) {
+      overlayEl.style.transition = "";
+      overlayEl.style.backdropFilter = "";
+      overlayEl.style.webkitBackdropFilter = "";
+    }
     const delta = Math.max(0, currentY - startY);
     sheetEl.style.transform = "";
     if (delta > 80) {

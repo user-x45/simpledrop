@@ -1189,16 +1189,26 @@ function bindSheetSwipeToClose(handleEl, sheetEl, closeFn) {
     if (!dragging) return;
     dragging = false;
     sheetEl.style.transition = "";
-    if (overlayEl) {
-      overlayEl.style.transition = "";
-      overlayEl.style.backdropFilter = "";
-      overlayEl.style.webkitBackdropFilter = "";
-      overlayEl.style.background = "";
-    }
     const delta = Math.max(0, currentY - startY);
     sheetEl.style.transform = "";
     if (delta > 80) {
+      if (overlayEl) {
+        overlayEl.style.transition = "";
+        const clearOverlayStyles = () => {
+          overlayEl.style.backdropFilter = "";
+          overlayEl.style.webkitBackdropFilter = "";
+          overlayEl.style.background = "";
+        };
+        overlayEl.addEventListener("transitionend", clearOverlayStyles, { once: true });
+      }
       closeFn();
+    } else {
+      if (overlayEl) {
+        overlayEl.style.transition = "";
+        overlayEl.style.backdropFilter = "";
+        overlayEl.style.webkitBackdropFilter = "";
+        overlayEl.style.background = "";
+      }
     }
   }
 

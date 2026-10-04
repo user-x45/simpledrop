@@ -1099,7 +1099,11 @@ const SIGNALING_URL = (() => {
   return proto + "//simple-drop.user-x45.workers.dev/ws";
 })();
 
-const CHUNK_SIZE = 16 * 1024;
+const CHUNK_SIZE = 64 * 1024;
+const READ_BLOCK_SIZE = 4 * 1024 * 1024;
+const BUFFER_HIGH = 8 * 1024 * 1024;
+const BUFFER_LOW = 1024 * 1024;
+const PAINT_INTERVAL_MS = 100;
 
 const ADJECTIVE_LIST = [
   "静かな", "素早い", "明るい", "涼しい", "温かい", "小さな", "大きな", "遠い",
@@ -1911,59 +1915,91 @@ async function sendMessage(peerId, text) {
 function beginSending(entry, file, card) {
   const dc = entry.dataChannel;
   const fill = card.querySelector(".progress-fill");
-  entry.outgoing = { card };
+  const outgoing = { card };
+  entry.outgoing = outgoing;
   incActiveTransfers();
 
-  let offset = 0;
-  const reader = new FileReader();
+  const maxMessage = (entry.pc.sctp && entry.pc.sctp.maxMessageSize) || CHUNK_SIZE;
+  const chunkSize = Math.max(1024, Math.min(CHUNK_SIZE, maxMessage));
+  dc.bufferedAmountLowThreshold = BUFFER_LOW;
+
+  let sent = 0;
+  let lastPaint = 0;
+
+  function paint(force) {
+    const now = performance.now();
+    if (!force && now - lastPaint < PAINT_INTERVAL_MS) return;
+    lastPaint = now;
+    const pct = file.size ? Math.min(100, Math.round((sent / file.size) * 100)) : 100;
+    fill.style.width = pct + "%";
+  }
 
   function fail(message) {
+    if (entry.outgoing !== outgoing) return;
     entry.outgoing = null;
     decActiveTransfers();
     markCardFailed(card, message);
   }
 
-  function readSlice() {
-    const slice = file.slice(offset, offset + CHUNK_SIZE);
-    reader.readAsArrayBuffer(slice);
+  function waitDrain() {
+    return new Promise((resolve) => {
+      const done = () => {
+        dc.removeEventListener("bufferedamountlow", done);
+        dc.removeEventListener("close", done);
+        resolve();
+      };
+      dc.addEventListener("bufferedamountlow", done);
+      dc.addEventListener("close", done);
+    });
   }
 
-  reader.addEventListener("error", () => {
-    fail("ファイルの読み込みに失敗しました");
-  });
-
-  reader.addEventListener("load", () => {
+  async function run() {
     try {
-      dc.send(reader.result);
+      dc.send(JSON.stringify({ meta: true, name: file.name, size: file.size, mime: file.type }));
     } catch (err) {
       fail(`${entry.peerName}への送信に失敗しました`);
       return;
     }
-    offset += reader.result.byteLength;
-    const pct = Math.min(100, Math.round((offset / file.size) * 100));
-    fill.style.width = pct + "%";
-    if (offset < file.size) {
-      if (dc.bufferedAmount > 8 * CHUNK_SIZE) {
-        setTimeout(readSlice, 30);
-      } else {
-        readSlice();
-      }
-    } else {
-      entry.outgoing = null;
-      decActiveTransfers();
-      card.querySelector(".fmeta").textContent = "送信完了";
-      addCloseButton(card);
-    }
-  });
 
-  try {
-    dc.send(JSON.stringify({ meta: true, name: file.name, size: file.size, mime: file.type }));
-  } catch (err) {
-    fail(`${entry.peerName}への送信に失敗しました`);
-    return;
+    let blockStart = 0;
+    let pending = file.size > 0 ? file.slice(0, READ_BLOCK_SIZE).arrayBuffer() : null;
+
+    try {
+      if (file.size === 0) dc.send(new ArrayBuffer(0));
+
+      while (pending) {
+        const buf = await pending;
+        const nextStart = blockStart + buf.byteLength;
+        pending = nextStart < file.size
+          ? file.slice(nextStart, nextStart + READ_BLOCK_SIZE).arrayBuffer()
+          : null;
+
+        for (let p = 0; p < buf.byteLength; p += chunkSize) {
+          if (entry.outgoing !== outgoing) return;
+          if (dc.readyState !== "open") throw new Error("closed");
+          if (dc.bufferedAmount > BUFFER_HIGH) await waitDrain();
+          if (dc.readyState !== "open") throw new Error("closed");
+          const len = Math.min(chunkSize, buf.byteLength - p);
+          dc.send(new Uint8Array(buf, p, len));
+          sent += len;
+          paint(false);
+        }
+        blockStart = nextStart;
+      }
+    } catch (err) {
+      fail(`${entry.peerName}への送信に失敗しました`);
+      return;
+    }
+
+    if (entry.outgoing !== outgoing) return;
+    paint(true);
+    entry.outgoing = null;
+    decActiveTransfers();
+    card.querySelector(".fmeta").textContent = "送信完了";
+    addCloseButton(card);
   }
 
-  readSlice();
+  run();
 }
 
 async function handlePeerSignal(fromId, fromName, payload) {
@@ -2025,8 +2061,11 @@ function setupDataChannel(entry, peerId) {
           mime: meta.mime,
           chunks: [],
           received: 0,
+          lastPaint: 0,
+          fill: null,
           card: createTransferCard(meta.name, meta.size, `${entry.peerName}から受信中`, true, meta.mime),
         };
+        entry.incoming.fill = entry.incoming.card.querySelector(".progress-fill");
         incActiveTransfers();
       }
       return;
@@ -2035,8 +2074,12 @@ function setupDataChannel(entry, peerId) {
     if (!inc) return;
     inc.chunks.push(event.data);
     inc.received += event.data.byteLength;
-    const pct = Math.min(100, Math.round((inc.received / inc.size) * 100));
-    inc.card.querySelector(".progress-fill").style.width = pct + "%";
+    const now = performance.now();
+    if (now - inc.lastPaint >= PAINT_INTERVAL_MS) {
+      inc.lastPaint = now;
+      const pct = Math.min(100, Math.round((inc.received / inc.size) * 100));
+      inc.fill.style.width = pct + "%";
+    }
     if (inc.received >= inc.size) {
       finalizeIncoming(inc, entry.peerName);
       entry.incoming = null;

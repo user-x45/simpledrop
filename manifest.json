@@ -22,5 +22,28 @@
       "type": "image/png",
       "purpose": "any"
     }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/1.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "近くの端末が自動で表示される"
+    },
+    {
+      "src": "screenshots/2.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "ファイルもメッセージもすぐ送れる"
+    },
+    {
+      "src": "screenshots/3.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "端末間で直接転送、アプリのように使える"
+    }
   ]
 }

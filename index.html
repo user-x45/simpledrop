@@ -680,6 +680,10 @@
     transform: translateY(0);
   }
 
+  .sheet.stretching {
+    box-shadow: 0 120px 0 0 var(--panel);
+  }
+
   @media (min-width: 769px) {
     .overlay {
       align-items: center;
@@ -1328,8 +1332,11 @@ function bindSheetSwipeToClose(handleEl, sheetEl, closeFn) {
   function onMove(clientY) {
     if (!dragging) return;
     currentY = clientY;
-    const delta = Math.max(0, currentY - startY);
-    sheetEl.style.transform = `translateY(${delta}px)`;
+    const raw = currentY - startY;
+    const delta = Math.max(0, raw);
+    const lift = raw < 0 ? -48 * (1 - Math.exp(raw / 80)) : 0;
+    sheetEl.classList.toggle("stretching", raw < 0);
+    sheetEl.style.transform = `translateY(${raw < 0 ? lift : delta}px)`;
     if (overlayEl) {
       const ratio = Math.min(delta / maxDelta, 1);
       const blur = baseBlur * (1 - ratio);
@@ -1343,8 +1350,17 @@ function bindSheetSwipeToClose(handleEl, sheetEl, closeFn) {
   function onEnd() {
     if (!dragging) return;
     dragging = false;
-    sheetEl.style.transition = "";
     const delta = Math.max(0, currentY - startY);
+    if (delta > 80) {
+      sheetEl.style.transition = "";
+      sheetEl.classList.remove("stretching");
+    } else {
+      sheetEl.style.transition = "transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)";
+      setTimeout(() => {
+        sheetEl.style.transition = "";
+        sheetEl.classList.remove("stretching");
+      }, 600);
+    }
     sheetEl.style.transform = "";
     if (delta > 80) {
       if (overlayEl) {

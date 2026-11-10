@@ -1396,7 +1396,7 @@
         <input class="code-input" id="roomCodeInput" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="12" placeholder="ルームコード" aria-label="ルームコード">
         <button class="send-btn" id="roomJoin" type="button" disabled>参加</button>
       </div>
-      <p class="room-note">ファイルは端末同士で直接送られ、サーバーは接続の仲介だけを行います。ルームに入っている間は、同じネットワークの端末は表示されません。退出すると元に戻ります。</p>
+      <p class="room-note">ファイルは端末同士で直接送られ、サーバーは接続の仲介だけを行います。コードで参加できるのは、誰かが入っているルームだけです。ルームに入っている間は、同じネットワークの端末は表示されません。退出すると元に戻ります。</p>
     </div>
     <div class="sheet-pane" id="roomPaneActive">
       <p class="desc">このコードか招待リンクを相手に伝えると、同じルームに参加できます。</p>
@@ -1477,8 +1477,21 @@ function generateRoomCode() {
   return code;
 }
 
+function generateRoomToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  let bin = "";
+  bytes.forEach((b) => {
+    bin += String.fromCharCode(b);
+  });
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 function signalingUrl() {
-  return roomCode ? `${SIGNALING_BASE}?room=${encodeURIComponent(roomCode)}` : SIGNALING_BASE;
+  if (!roomCode) return SIGNALING_BASE;
+  const params = new URLSearchParams({ room: roomCode, mode: roomRole });
+  if (roomRole === "create" && roomToken) params.set("token", roomToken);
+  return `${SIGNALING_BASE}?${params.toString()}`;
 }
 
 function connectedLabel() {
@@ -1498,6 +1511,10 @@ const ADJECTIVE_LIST = [
 
 let ws = null;
 let roomCode = null;
+let roomRole = "join";
+let roomToken = null;
+let roomNotice = null;
+let createRetries = 0;
 let myId = null;
 let myName = null;
 let serverAssignedName = null;
@@ -1918,14 +1935,17 @@ function handleSignalingMessage(data) {
   if (data.type === "pong") {
     return;
   }
-  if (data.type === "error" && data.reason === "room-full") {
-    showToast("このルームは満員です", true);
-    switchRoom(null);
+  if (data.type === "error") {
+    handleRoomError(data.reason);
     return;
   }
   if (data.type === "welcome") {
     myId = data.id;
     serverAssignedName = data.name;
+    if (roomNotice) {
+      showToast(roomNotice);
+      roomNotice = null;
+    }
     myName = customName || data.name;
     youNameEl.textContent = myName;
     if (customName) {
@@ -3030,16 +3050,25 @@ function stripRoomFromLocation() {
 
 function readStoredRoom() {
   try {
-    return normalizeRoomCode(sessionStorage.getItem(ROOM_STORAGE_KEY));
+    const raw = sessionStorage.getItem(ROOM_STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    const code = normalizeRoomCode(data && data.code);
+    if (!isValidRoomCode(code)) return null;
+    const token = data.role === "create" && typeof data.token === "string" ? data.token : null;
+    return { code, role: token ? "create" : "join", token };
   } catch (err) {
-    return "";
+    return null;
   }
 }
 
 function storeRoom() {
   try {
-    if (roomCode) sessionStorage.setItem(ROOM_STORAGE_KEY, roomCode);
-    else sessionStorage.removeItem(ROOM_STORAGE_KEY);
+    if (roomCode) {
+      sessionStorage.setItem(ROOM_STORAGE_KEY, JSON.stringify({ code: roomCode, role: roomRole, token: roomToken }));
+    } else {
+      sessionStorage.removeItem(ROOM_STORAGE_KEY);
+    }
   } catch (err) {}
 }
 
@@ -3078,8 +3107,10 @@ function updateRoomUi() {
   roomShare.hidden = typeof navigator.share !== "function";
 }
 
-function switchRoom(code) {
+function switchRoom(code, role, token) {
   roomCode = code;
+  roomRole = code && role === "create" && token ? "create" : "join";
+  roomToken = roomRole === "create" ? token : null;
   storeRoom();
   updateRoomUi();
   clearTimeout(reconnectTimer);
@@ -3113,9 +3144,27 @@ function closeRoomSheet() {
   roomCodeInput.blur();
 }
 
+function handleRoomError(reason) {
+  if (reason === "room-exists" && roomRole === "create" && createRetries < 3) {
+    createRetries += 1;
+    switchRoom(generateRoomCode(), "create", generateRoomToken());
+    return;
+  }
+  roomNotice = null;
+  if (reason === "room-full") {
+    showToast("このルームは満員です", true);
+  } else if (reason === "room-not-found") {
+    showToast("ルームが見つかりません。コードと、招待した人がルームに入っているかを確認してください", true);
+  } else {
+    showToast("ルームに接続できませんでした", true);
+  }
+  switchRoom(null);
+}
+
 function createRoom() {
-  switchRoom(generateRoomCode());
-  showToast("ルームを作成しました");
+  createRetries = 0;
+  roomNotice = "ルームを作成しました";
+  switchRoom(generateRoomCode(), "create", generateRoomToken());
 }
 
 function joinRoom(raw) {
@@ -3126,11 +3175,12 @@ function joinRoom(raw) {
   }
   closeRoomSheet();
   if (code === roomCode) return;
-  switchRoom(code);
-  showToast(`ルーム ${code} に参加しました`);
+  roomNotice = `ルーム ${code} に参加しました`;
+  switchRoom(code, "join", null);
 }
 
 function leaveRoom() {
+  roomNotice = null;
   switchRoom(null);
   closeRoomSheet();
   showToast("ルームを退出しました");
@@ -3194,18 +3244,26 @@ bindSheetSwipeToClose(document.querySelector("#roomOverlay .sheet-header"), room
 });
 
 const initialRoomParam = new URLSearchParams(location.search).get("room");
+const storedRoom = readStoredRoom();
 if (initialRoomParam !== null) {
   const initialCode = normalizeRoomCode(initialRoomParam);
   if (isValidRoomCode(initialCode)) {
     roomCode = initialCode;
+    if (storedRoom && storedRoom.code === initialCode) {
+      roomRole = storedRoom.role;
+      roomToken = storedRoom.token;
+    } else {
+      roomNotice = `ルーム ${initialCode} に参加しました`;
+    }
   } else {
     showToast("招待リンクのルームコードが正しくありません", true);
   }
   stripRoomFromLocation();
 }
-if (!roomCode) {
-  const storedCode = readStoredRoom();
-  if (isValidRoomCode(storedCode)) roomCode = storedCode;
+if (!roomCode && storedRoom) {
+  roomCode = storedRoom.code;
+  roomRole = storedRoom.role;
+  roomToken = storedRoom.token;
 }
 storeRoom();
 updateRoomUi();

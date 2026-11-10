@@ -1088,11 +1088,14 @@
   .room-chip:active { transform: scale(0.96); }
 
   .room-chip.active {
+    background: var(--accent);
     border-color: var(--accent);
-    color: var(--accent);
+    color: var(--on-accent);
     font-weight: 700;
     letter-spacing: 0.04em;
   }
+
+  .room-chip.active i { color: var(--on-accent); }
 
   .hint-actions {
     display: flex;
@@ -1300,6 +1303,30 @@
     .alert-head { margin-bottom: 8px; }
     .alert-actions { margin-top: 10px; }
   }
+
+  @media (pointer: coarse) {
+    .room-chip { min-height: 40px; }
+  }
+
+  @media (max-width: 360px) {
+    .you-label { display: none; }
+    .room-note { font-size: 12px; }
+  }
+
+  @media (max-height: 700px) {
+    .room-code-display { font-size: 30px; padding-top: 10px; padding-bottom: 10px; margin-bottom: 10px; }
+    .room-actions { gap: 8px; }
+    .room-actions .alert-btn { min-height: 46px; padding: 10px; font-size: 16px; }
+    .room-divider { margin: 12px 0; }
+    .room-note { margin-top: 10px; }
+    .code-input, .room-join-row .send-btn, .room-create { min-height: 46px; }
+  }
+
+  @media (max-height: 600px) {
+    .room-code-display { font-size: 26px; }
+    .room-actions .alert-btn { min-height: 44px; }
+    .room-note { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -1314,7 +1341,7 @@
   <div class="status-row">
     <span class="status-dot" id="statusDot"></span>
     <span id="statusText">接続しています…</span>
-    <span>あなたの名前:</span>
+    <span class="you-label">あなたの名前:</span>
     <span class="you-name" id="youName" role="button" tabindex="0" title="タップして名前を変更" aria-label="名前を変更">—</span>
     <button class="room-chip" id="roomChip" type="button" aria-label="ルームの設定"><i class="fa-solid fa-door-open"></i><span id="roomChipText">ルーム</span></button>
   </div>
@@ -2990,12 +3017,29 @@ function shareUrl() {
   return roomCode ? inviteUrl(roomCode) : location.href;
 }
 
-function syncLocation() {
+const ROOM_STORAGE_KEY = "simpledrop-room";
+
+function stripRoomFromLocation() {
   const u = new URL(location.href);
-  if (roomCode) u.searchParams.set("room", roomCode);
-  else u.searchParams.delete("room");
+  if (!u.searchParams.has("room")) return;
+  u.searchParams.delete("room");
   try {
     history.replaceState(null, "", u.href);
+  } catch (err) {}
+}
+
+function readStoredRoom() {
+  try {
+    return normalizeRoomCode(sessionStorage.getItem(ROOM_STORAGE_KEY));
+  } catch (err) {
+    return "";
+  }
+}
+
+function storeRoom() {
+  try {
+    if (roomCode) sessionStorage.setItem(ROOM_STORAGE_KEY, roomCode);
+    else sessionStorage.removeItem(ROOM_STORAGE_KEY);
   } catch (err) {}
 }
 
@@ -3036,7 +3080,7 @@ function updateRoomUi() {
 
 function switchRoom(code) {
   roomCode = code;
-  syncLocation();
+  storeRoom();
   updateRoomUi();
   clearTimeout(reconnectTimer);
   stopMonitors();
@@ -3157,8 +3201,13 @@ if (initialRoomParam !== null) {
   } else {
     showToast("招待リンクのルームコードが正しくありません", true);
   }
-  syncLocation();
+  stripRoomFromLocation();
 }
+if (!roomCode) {
+  const storedCode = readStoredRoom();
+  if (isValidRoomCode(storedCode)) roomCode = storedCode;
+}
+storeRoom();
 updateRoomUi();
 
 if (!document.hidden) connect();

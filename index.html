@@ -718,6 +718,7 @@
   .sheet-close {
     display: block;
     margin: 16px auto 0;
+    padding: 10px 20px;
     background: none;
     border: none;
     color: var(--sub);
@@ -987,6 +988,23 @@
 
   .toast i { color: var(--accent); margin-right: 8px; }
 
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .peer-node.drop-target {
+    transform: scale(1.08);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.18), 0 0 28px rgba(var(--accent-rgb), 0.22);
+    animation-play-state: paused;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .peer-node { animation: fade-in 0.3s ease forwards; }
+    .sheet, .overlay, .alert-box, .toast { transition-duration: 0.01s; }
+  }
+
   @media (max-width: 480px) {
     header { padding: 14px 18px 2px; }
     header h1 { font-size: 26px; }
@@ -1012,12 +1030,12 @@
     <span>SimpleDrop</span>
     <button class="install-btn" id="installBtn" hidden><i class="fa-solid fa-download"></i> インストール</button>
   </h1>
-  <p>このページを開いている、同じネットワーク内の端末が浮かび上がります。選んで、そのままファイルを送れます。</p>
+  <p>このページを開いている、同じネットワーク内の端末が浮かび上がります。タップでファイル、長押しでメッセージを送れます。</p>
   <div class="status-row">
     <span class="status-dot" id="statusDot"></span>
     <span id="statusText">接続しています…</span>
     <span>／ あなたの名前は</span>
-    <span class="you-name" id="youName" title="タップして名前を変更">—</span>
+    <span class="you-name" id="youName" role="button" tabindex="0" title="タップして名前を変更">—</span>
   </div>
 </header>
 
@@ -1052,10 +1070,10 @@
   </div>
 </div>
 
-<div class="toast" id="toast"><i class="fa-solid fa-circle-check"></i><span id="toastText"></span></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><i class="fa-solid fa-circle-check"></i><span id="toastText"></span></div>
 
 <div class="overlay" id="qrOverlay">
-  <div class="sheet qr-sheet">
+  <div class="sheet qr-sheet" role="dialog" aria-modal="true" aria-label="QRコード">
     <div class="sheet-header"><div class="sheet-handle"></div></div>
     <h2>QRコードを表示</h2>
     <p class="desc">他の端末のカメラで読み取ると、このページが開きます。</p>
@@ -1066,7 +1084,7 @@
 </div>
 
 <div class="overlay" id="overlay">
-  <div class="sheet">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="送信">
     <div class="sheet-header"><div class="sheet-handle"></div></div>
     <h2><span class="to-name" id="sheetToName" style="white-space:nowrap">端末</span><span style="white-space:nowrap" id="sheetTitleTail">にファイルを送る</span></h2>
     <div class="sheet-tabs">
@@ -1075,17 +1093,17 @@
     </div>
     <div class="sheet-pane active" id="paneFile">
       <p class="desc">画像・動画・PDFなど、ファイルの種類は問いません。</p>
-      <div class="drop-zone" id="dropZone">
+      <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="ファイルを選択">
         <div class="dz-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
         <div class="dz-text">タップしてファイルを選ぶ</div>
-        <div class="dz-sub">またはここにドラッグ＆ドロップ</div>
+        <div class="dz-sub">またはここにドラッグ＆ドロップ（複数可）</div>
       </div>
-      <input type="file" id="fileInput">
+      <input type="file" id="fileInput" multiple>
     </div>
     <div class="sheet-pane" id="paneMsg">
       <textarea class="msg-input" id="msgInput" rows="4" maxlength="5000" placeholder="メッセージやURLを入力"></textarea>
       <div class="msg-foot">
-        <span class="msg-hint">Enterで改行できます</span>
+        <span class="msg-hint">Ctrl / ⌘ + Enterで送信</span>
         <button class="send-btn" id="msgSend" type="button" disabled><i class="fa-solid fa-paper-plane"></i>送信</button>
       </div>
     </div>
@@ -1119,6 +1137,7 @@ let customName = localStorage.getItem(NAME_STORAGE_KEY);
 const peers = new Map();
 const peerNodeEls = new Map();
 let activeTargetId = null;
+let lastFocusEl = null;
 
 const statusDot = document.getElementById("statusDot");
 const statusText = document.getElementById("statusText");
@@ -1130,6 +1149,7 @@ youNameEl.addEventListener("click", () => {
   const input = document.createElement("input");
   input.type = "text";
   input.className = "name-input";
+  input.setAttribute("aria-label", "名前");
   input.maxLength = 20;
   input.value = current;
   youNameEl.textContent = "";
@@ -1176,6 +1196,12 @@ youNameEl.addEventListener("click", () => {
       input.blur();
     }
   });
+});
+youNameEl.addEventListener("keydown", (e) => {
+  if (e.target === youNameEl && (e.key === "Enter" || e.key === " ")) {
+    e.preventDefault();
+    youNameEl.click();
+  }
 });
 const field = document.getElementById("field");
 const emptyHint = document.getElementById("emptyHint");
@@ -1551,6 +1577,7 @@ function renamePeer(id, name) {
   if (el) {
     const nameEl = el.querySelector(".peer-name");
     if (nameEl) nameEl.textContent = name;
+    el.setAttribute("aria-label", `${name}に送信`);
   }
   const conn = connections.get(id);
   if (conn) conn.peerName = name;
@@ -1620,6 +1647,9 @@ function pickPosition() {
 function renderPeerNode(id, name) {
   const el = document.createElement("div");
   el.className = "peer-node";
+  el.setAttribute("role", "button");
+  el.tabIndex = 0;
+  el.setAttribute("aria-label", `${name}に送信`);
   const pos = pickPosition();
   el.style.left = pos.x + "px";
   el.style.top = pos.y + "px";
@@ -1671,7 +1701,7 @@ function bindPeerGestures(el, id, name) {
       longPressed = true;
       el.classList.remove("pressing");
       if (navigator.vibrate) navigator.vibrate(30);
-      openSheet(id, name, "message");
+      openSheet(id, peers.get(id)?.name || name, "message");
     }, LONG_PRESS_MS);
   });
 
@@ -1685,12 +1715,33 @@ function bindPeerGestures(el, id, name) {
 
   el.addEventListener("contextmenu", (e) => e.preventDefault());
 
+  el.addEventListener("keydown", (e) => {
+    if (e.target === el && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      openSheet(id, peers.get(id)?.name || name, "file");
+    }
+  });
+
+  el.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    el.classList.add("drop-target");
+  });
+
+  el.addEventListener("dragleave", () => el.classList.remove("drop-target"));
+
+  el.addEventListener("drop", (e) => {
+    e.preventDefault();
+    el.classList.remove("drop-target");
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) sendFiles(id, files);
+  });
+
   el.addEventListener("click", () => {
     if (longPressed) {
       longPressed = false;
       return;
     }
-    openSheet(id, name, "file");
+    openSheet(id, peers.get(id)?.name || name, "file");
   });
 }
 
@@ -1704,23 +1755,24 @@ function setSheetMode(mode) {
 }
 
 function openSheet(id, name, mode) {
+  lastFocusEl = document.activeElement;
   activeTargetId = id;
   sheetToName.textContent = name;
   setSheetMode(mode);
   overlay.classList.add("open");
-  if (mode === "message") {
-    setTimeout(() => msgInput.focus(), 320);
-  }
+  setTimeout(() => (mode === "message" ? msgInput : dropZone).focus(), 320);
 }
 
 function openUploadSheet(id, name) {
-  openSheet(id, name, "file");
+  openSheet(id, peers.get(id)?.name || name, "file");
 }
 
 function closeUploadSheet() {
   overlay.classList.remove("open");
   msgInput.blur();
   activeTargetId = null;
+  if (lastFocusEl && lastFocusEl.focus) lastFocusEl.focus();
+  lastFocusEl = null;
 }
 
 tabFile.addEventListener("click", () => setSheetMode("file"));
@@ -1769,11 +1821,20 @@ overlay.addEventListener("click", (e) => {
 
 dropZone.addEventListener("click", () => fileInput.click());
 
+dropZone.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    fileInput.click();
+  }
+});
+
 fileInput.addEventListener("change", () => {
   if (fileInput.files.length > 0) {
-    sendFile(activeTargetId, fileInput.files[0]);
-    closeUploadSheet();
+    const files = Array.from(fileInput.files);
+    const targetId = activeTargetId;
     fileInput.value = "";
+    closeUploadSheet();
+    sendFiles(targetId, files);
   }
 });
 
@@ -1790,8 +1851,10 @@ dropZone.addEventListener("drop", (e) => {
   e.preventDefault();
   dropZone.classList.remove("dragover");
   if (e.dataTransfer.files.length > 0) {
-    sendFile(activeTargetId, e.dataTransfer.files[0]);
+    const files = Array.from(e.dataTransfer.files);
+    const targetId = activeTargetId;
     closeUploadSheet();
+    sendFiles(targetId, files);
   }
 });
 
@@ -1900,11 +1963,33 @@ async function sendFile(peerId, file) {
     entry = await ensureChannel(peerId);
   } catch (err) {
     showToast("接続できませんでした", true);
-    return;
+    return false;
   }
   const card = createTransferCard(file.name, file.size, "送信中", true, file.type);
   attachPreview(card, file.name, file.type, file);
-  beginSending(entry, file, card);
+  await beginSending(entry, file, card);
+  return true;
+}
+
+const sendQueues = new Map();
+
+function sendFiles(peerId, files) {
+  const prev = sendQueues.get(peerId) || Promise.resolve();
+  const next = prev.then(async () => {
+    for (const file of files) {
+      if (!(await sendFile(peerId, file))) break;
+    }
+  });
+  sendQueues.set(peerId, next);
+  return next;
+}
+
+function setProgress(card, fill, pct) {
+  fill.style.width = pct + "%";
+  const meta = card.querySelector(".fmeta");
+  if (!meta) return;
+  if (!card.dataset.base) card.dataset.base = meta.textContent;
+  meta.textContent = `${card.dataset.base} ・ ${pct}%`;
 }
 
 async function sendMessage(peerId, text) {
@@ -1931,7 +2016,7 @@ function beginSending(entry, file, card) {
     if (!force && now - lastPaint < PAINT_INTERVAL_MS) return;
     lastPaint = now;
     const pct = file.size ? Math.min(100, Math.round((sent / file.size) * 100)) : 100;
-    fill.style.width = pct + "%";
+    setProgress(card, fill, pct);
   }
 
   function fail(message) {
@@ -1999,7 +2084,7 @@ function beginSending(entry, file, card) {
     addCloseButton(card);
   }
 
-  run();
+  return run();
 }
 
 async function handlePeerSignal(fromId, fromName, payload) {
@@ -2078,7 +2163,7 @@ function setupDataChannel(entry, peerId) {
     if (now - inc.lastPaint >= PAINT_INTERVAL_MS) {
       inc.lastPaint = now;
       const pct = Math.min(100, Math.round((inc.received / inc.size) * 100));
-      inc.fill.style.width = pct + "%";
+      setProgress(inc.card, inc.fill, pct);
     }
     if (inc.received >= inc.size) {
       finalizeIncoming(inc, entry.peerName);
@@ -2398,6 +2483,12 @@ function escapeHtml(str) {
 
 bindSheetSwipeToClose(document.querySelector("#overlay .sheet-header"), overlay.querySelector(".sheet"), closeUploadSheet);
 bindSheetSwipeToClose(document.querySelector("#qrOverlay .sheet-header"), qrOverlay.querySelector(".sheet"), closeQr);
+
+["dragover", "drop"].forEach((type) => {
+  window.addEventListener(type, (e) => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")) e.preventDefault();
+  });
+});
 
 if (!document.hidden) connect();
 

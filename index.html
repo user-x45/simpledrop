@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SimpleDrop｜ブラウザでファイルを共有</title>
-<meta name="description" content="同じネットワーク内の端末に、ブラウザからすばやくファイルを送れます。">
+<meta name="description" content="同じネットワーク内の端末や、ルームコードで招待した相手に、ブラウザからすばやくファイルを送れます。">
 <meta name="robots" content="noindex, nofollow">
 <link href="favicon/32.png" rel="icon" sizes="32x32" type="image/png">
 <link href="favicon/96.png" rel="icon" sizes="96x96" type="image/png">
@@ -1065,6 +1065,148 @@
 
   .toast i { color: var(--accent); margin-right: 8px; }
 
+  .room-chip {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel-raised);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 14px;
+    min-height: 36px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.15s ease;
+  }
+
+  .room-chip i { color: var(--accent); }
+  .room-chip:hover { border-color: var(--accent-dim); }
+  .room-chip:active { transform: scale(0.96); }
+
+  .room-chip.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  .hint-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .hint-actions .qr-btn { pointer-events: auto; }
+
+  .room-create {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .room-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0;
+    color: var(--sub);
+    font-size: 14px;
+  }
+
+  .room-divider::before,
+  .room-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  .room-join-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .code-input {
+    flex: 1;
+    min-width: 0;
+    background: var(--bg);
+    color: var(--text);
+    border: 1.5px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 16px;
+    min-height: 52px;
+    font-family: inherit;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    text-align: center;
+    text-transform: uppercase;
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+
+  .code-input:focus { border-color: var(--accent-dim); }
+
+  .code-input::placeholder {
+    color: var(--sub);
+    opacity: 0.7;
+    font-size: 16px;
+    font-weight: 400;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  .room-note {
+    margin: 16px 0 0;
+    color: var(--sub);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .room-code-display {
+    display: block;
+    width: 100%;
+    margin: 0 0 14px;
+    padding: 16px 8px 16px calc(8px + 0.18em);
+    background: var(--bg);
+    color: var(--accent);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    font-family: inherit;
+    font-size: 38px;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+  }
+
+  .room-code-display:hover { border-color: var(--accent-dim); }
+
+  .room-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .room-actions .alert-btn {
+    width: 100%;
+    flex: none;
+  }
+
+  @media (max-width: 360px) {
+    .room-chip { padding: 4px 10px; font-size: 13px; }
+    .code-input { font-size: 18px; letter-spacing: 0.16em; }
+    .room-code-display { font-size: 30px; }
+  }
+
   :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -1168,12 +1310,13 @@
     <span>SimpleDrop</span>
     <button class="install-btn" id="installBtn" hidden><i class="fa-solid fa-download"></i><span class="install-label">インストール</span></button>
   </h1>
-  <p>同じネットワークの端末が表示されます。<strong>タップ</strong>でファイル、<strong>長押し</strong>でメッセージを送れます。</p>
+  <p><span id="headerScope">同じネットワークの端末が表示されます。</span><strong>タップ</strong>でファイル、<strong>長押し</strong>でメッセージを送れます。</p>
   <div class="status-row">
     <span class="status-dot" id="statusDot"></span>
     <span id="statusText">接続しています…</span>
     <span>あなたの名前:</span>
     <span class="you-name" id="youName" role="button" tabindex="0" title="タップして名前を変更" aria-label="名前を変更">—</span>
+    <button class="room-chip" id="roomChip" type="button" aria-label="ルームの設定"><i class="fa-solid fa-door-open"></i><span id="roomChipText">ルーム</span></button>
   </div>
 </header>
 
@@ -1185,8 +1328,11 @@
 <main>
   <div id="field">
     <div class="empty-hint" id="emptyHint">
-      <div class="empty-hint-text">まだ誰もいません。<br>同じWi-Fiの端末でこのページを開くと、ここに現れます。</div>
-      <button class="qr-btn" id="qrBtn" type="button"><i class="fa-solid fa-qrcode"></i>QRコードを表示</button>
+      <div class="empty-hint-text" id="emptyText"></div>
+      <div class="hint-actions">
+        <button class="qr-btn" id="roomBtn" type="button"><i class="fa-solid fa-link"></i><span id="roomBtnText">ルームで共有</span></button>
+        <button class="qr-btn" id="qrBtn" type="button"><i class="fa-solid fa-qrcode"></i>QRコードを表示</button>
+      </div>
     </div>
     <button class="qr-btn broadcast-btn" id="broadcastBtn" type="button" hidden><i class="fa-solid fa-users"></i>全員に送る</button>
   </div>
@@ -1211,11 +1357,39 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"><i class="fa-solid fa-circle-check"></i><span id="toastText"></span></div>
 
+<div class="overlay" id="roomOverlay">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="ルーム">
+    <div class="sheet-header"><div class="sheet-handle"></div></div>
+    <h2 id="roomTitle">ルームで共有</h2>
+    <div class="sheet-pane active" id="roomPaneIdle">
+      <p class="desc">別のネットワークにいる相手とも、ルームコードか招待リンクでつながれます。</p>
+      <button class="send-btn room-create" id="roomCreate" type="button"><i class="fa-solid fa-plus"></i>新しいルームを作る</button>
+      <div class="room-divider">または</div>
+      <div class="room-join-row">
+        <input class="code-input" id="roomCodeInput" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="12" placeholder="ルームコード" aria-label="ルームコード">
+        <button class="send-btn" id="roomJoin" type="button" disabled>参加</button>
+      </div>
+      <p class="room-note">ファイルは端末同士で直接送られ、サーバーは接続の仲介だけを行います。ルームに入っている間は、同じネットワークの端末は表示されません。退出すると元に戻ります。</p>
+    </div>
+    <div class="sheet-pane" id="roomPaneActive">
+      <p class="desc">このコードか招待リンクを相手に伝えると、同じルームに参加できます。</p>
+      <button class="room-code-display" id="roomCodeDisplay" type="button" aria-label="ルームコードをコピー"></button>
+      <div class="room-actions">
+        <button class="alert-btn primary" id="roomCopyLink" type="button"><i class="fa-solid fa-link"></i>招待リンクをコピー</button>
+        <button class="alert-btn" id="roomShare" type="button" hidden><i class="fa-solid fa-share-nodes"></i>共有する</button>
+        <button class="alert-btn" id="roomShowQr" type="button"><i class="fa-solid fa-qrcode"></i>QRコードを表示</button>
+        <button class="alert-btn" id="roomLeave" type="button"><i class="fa-solid fa-right-from-bracket"></i>ルームを退出</button>
+      </div>
+    </div>
+    <button class="sheet-close" id="roomClose" type="button">閉じる</button>
+  </div>
+</div>
+
 <div class="overlay" id="qrOverlay">
   <div class="sheet qr-sheet" role="dialog" aria-modal="true" aria-label="QRコード">
     <div class="sheet-header"><div class="sheet-handle"></div></div>
     <h2>QRコードを表示</h2>
-    <p class="desc">他の端末のカメラで読み取ると、このページが開きます。</p>
+    <p class="desc" id="qrDesc">他の端末のカメラで読み取ると、このページが開きます。</p>
     <div class="qr-box" id="qrBox"></div>
     <div class="qr-url" id="qrUrl"></div>
     <button class="sheet-close" id="qrClose">閉じる</button>
@@ -1251,10 +1425,38 @@
 </div>
 
 <script>
-const SIGNALING_URL = (() => {
-  const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  return proto + "//simple-drop.user-x45.workers.dev/ws";
-})();
+const SIGNALING_BASE = (location.protocol === "https:" ? "wss:" : "ws:") + "//simple-drop.user-x45.workers.dev/ws";
+
+const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const ROOM_CODE_LENGTH = 6;
+const ROOM_CODE_PATTERN = new RegExp(`^[${ROOM_ALPHABET}]{${ROOM_CODE_LENGTH}}$`);
+
+function normalizeRoomCode(raw) {
+  return String(raw || "")
+    .normalize("NFKC")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+function isValidRoomCode(code) {
+  return ROOM_CODE_PATTERN.test(code);
+}
+
+function generateRoomCode() {
+  const bytes = new Uint8Array(ROOM_CODE_LENGTH);
+  crypto.getRandomValues(bytes);
+  let code = "";
+  for (const b of bytes) code += ROOM_ALPHABET[b % ROOM_ALPHABET.length];
+  return code;
+}
+
+function signalingUrl() {
+  return roomCode ? `${SIGNALING_BASE}?room=${encodeURIComponent(roomCode)}` : SIGNALING_BASE;
+}
+
+function connectedLabel() {
+  return roomCode ? "ルームに接続中" : "接続中";
+}
 
 const CHUNK_SIZE = 64 * 1024;
 const READ_BLOCK_SIZE = 4 * 1024 * 1024;
@@ -1268,6 +1470,7 @@ const ADJECTIVE_LIST = [
 ];
 
 let ws = null;
+let roomCode = null;
 let myId = null;
 let myName = null;
 let serverAssignedName = null;
@@ -1351,21 +1554,22 @@ const qrOverlay = document.getElementById("qrOverlay");
 const qrClose = document.getElementById("qrClose");
 const qrBox = document.getElementById("qrBox");
 const qrUrl = document.getElementById("qrUrl");
-let qrRendered = false;
+let qrRenderedUrl = null;
 
 function openQr() {
-  if (!qrRendered) {
+  const url = shareUrl();
+  if (qrRenderedUrl !== url) {
     qrBox.replaceChildren();
     new QRCode(qrBox, {
-      text: location.href,
+      text: url,
       width: 200,
       height: 200,
       colorDark: "#14231B",
       colorLight: "#FFFFFF",
       correctLevel: QRCode.CorrectLevel.M
     });
-    qrUrl.textContent = location.href;
-    qrRendered = true;
+    qrUrl.textContent = url;
+    qrRenderedUrl = url;
   }
   qrOverlay.classList.add("open");
 }
@@ -1570,7 +1774,7 @@ function connect() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
   intentionalClose = false;
-  const socket = new WebSocket(SIGNALING_URL);
+  const socket = new WebSocket(signalingUrl());
   ws = socket;
   statusText.textContent = "接続しています…";
 
@@ -1578,7 +1782,7 @@ function connect() {
     if (ws !== socket) return;
     reconnectAttempts = 0;
     statusDot.classList.add("connected");
-    statusText.textContent = "接続中";
+    statusText.textContent = connectedLabel();
     startMonitors(socket);
   });
 
@@ -1685,6 +1889,11 @@ function handleSignalingMessage(data) {
     return;
   }
   if (data.type === "pong") {
+    return;
+  }
+  if (data.type === "error" && data.reason === "room-full") {
+    showToast("このルームは満員です", true);
+    switchRoom(null);
     return;
   }
   if (data.type === "welcome") {
@@ -2283,18 +2492,42 @@ function beginSending(entry, file, card) {
   return run();
 }
 
-async function handlePeerSignal(fromId, fromName, payload) {
+function handlePeerSignal(fromId, fromName, payload) {
+  if (!payload || typeof payload !== "object") return Promise.resolve();
   const entry = getOrCreateConnection(fromId, fromName);
+  const run = () => processPeerSignal(entry, fromId, payload);
+  entry.signalChain = (entry.signalChain || Promise.resolve()).then(run).catch(() => {});
+  return entry.signalChain;
+}
+
+async function flushPendingIce(entry) {
+  const list = entry.pendingIce || [];
+  entry.pendingIce = [];
+  for (const candidate of list) {
+    try {
+      await entry.pc.addIceCandidate(candidate);
+    } catch (err) {}
+  }
+}
+
+async function processPeerSignal(entry, fromId, payload) {
   const pc = entry.pc;
 
   if (payload.kind === "offer") {
     await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+    await flushPendingIce(entry);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     sendSignal(fromId, { kind: "answer", sdp: answer });
   } else if (payload.kind === "answer") {
     await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+    await flushPendingIce(entry);
   } else if (payload.kind === "ice") {
+    if (!pc.remoteDescription) {
+      if (!entry.pendingIce) entry.pendingIce = [];
+      entry.pendingIce.push(payload.candidate);
+      return;
+    }
     try {
       await pc.addIceCandidate(payload.candidate);
     } catch (err) {}
@@ -2666,8 +2899,9 @@ function showToast(message, isError) {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (alertOverlay.classList.contains("open")) dismissAlert();
-  else if (overlay.classList.contains("open")) closeUploadSheet();
   else if (qrOverlay.classList.contains("open")) closeQr();
+  else if (roomOverlay.classList.contains("open")) closeRoomSheet();
+  else if (overlay.classList.contains("open")) closeUploadSheet();
 });
 
 function formatSize(bytes) {
@@ -2723,11 +2957,209 @@ function escapeHtml(str) {
 bindSheetSwipeToClose(document.querySelector("#overlay .sheet-header"), overlay.querySelector(".sheet"), closeUploadSheet);
 bindSheetSwipeToClose(document.querySelector("#qrOverlay .sheet-header"), qrOverlay.querySelector(".sheet"), closeQr);
 
+const roomChip = document.getElementById("roomChip");
+const roomChipText = document.getElementById("roomChipText");
+const roomBtn = document.getElementById("roomBtn");
+const roomBtnText = document.getElementById("roomBtnText");
+const roomOverlay = document.getElementById("roomOverlay");
+const roomTitle = document.getElementById("roomTitle");
+const roomPaneIdle = document.getElementById("roomPaneIdle");
+const roomPaneActive = document.getElementById("roomPaneActive");
+const roomCreate = document.getElementById("roomCreate");
+const roomCodeInput = document.getElementById("roomCodeInput");
+const roomJoin = document.getElementById("roomJoin");
+const roomCodeDisplay = document.getElementById("roomCodeDisplay");
+const roomCopyLink = document.getElementById("roomCopyLink");
+const roomShare = document.getElementById("roomShare");
+const roomShowQr = document.getElementById("roomShowQr");
+const roomLeave = document.getElementById("roomLeave");
+const roomClose = document.getElementById("roomClose");
+const headerScope = document.getElementById("headerScope");
+const emptyText = document.getElementById("emptyText");
+const qrDesc = document.getElementById("qrDesc");
+
+function inviteUrl(code) {
+  const u = new URL(location.href);
+  u.search = "";
+  u.hash = "";
+  u.searchParams.set("room", code);
+  return u.href;
+}
+
+function shareUrl() {
+  return roomCode ? inviteUrl(roomCode) : location.href;
+}
+
+function syncLocation() {
+  const u = new URL(location.href);
+  if (roomCode) u.searchParams.set("room", roomCode);
+  else u.searchParams.delete("room");
+  try {
+    history.replaceState(null, "", u.href);
+  } catch (err) {}
+}
+
+function formatRoomCode(code) {
+  return code.slice(0, 3) + " " + code.slice(3);
+}
+
+function setLines(el, lines) {
+  el.replaceChildren();
+  lines.forEach((line, i) => {
+    if (i > 0) el.appendChild(document.createElement("br"));
+    el.appendChild(document.createTextNode(line));
+  });
+}
+
+function updateRoomUi() {
+  const inRoom = !!roomCode;
+  roomChip.classList.toggle("active", inRoom);
+  roomChipText.textContent = inRoom ? `ルーム ${roomCode}` : "ルーム";
+  headerScope.textContent = inRoom
+    ? "ルームに参加している端末が表示されます。"
+    : "同じネットワークの端末が表示されます。";
+  roomBtnText.textContent = inRoom ? "招待する" : "ルームで共有";
+  qrDesc.textContent = inRoom
+    ? "他の端末のカメラで読み取ると、このルームに参加できます。"
+    : "他の端末のカメラで読み取ると、このページが開きます。";
+  if (inRoom) {
+    setLines(emptyText, [`ルーム ${roomCode} にはまだ誰もいません。`, "招待リンクやQRコードを相手に送ってください。"]);
+  } else {
+    setLines(emptyText, ["まだ誰もいません。", "同じWi-Fiの端末でこのページを開くか、ルームで招待してください。"]);
+  }
+  roomTitle.textContent = inRoom ? "ルームに参加中" : "ルームで共有";
+  roomPaneIdle.classList.toggle("active", !inRoom);
+  roomPaneActive.classList.toggle("active", inRoom);
+  roomCodeDisplay.textContent = inRoom ? formatRoomCode(roomCode) : "";
+  roomShare.hidden = typeof navigator.share !== "function";
+}
+
+function switchRoom(code) {
+  roomCode = code;
+  syncLocation();
+  updateRoomUi();
+  clearTimeout(reconnectTimer);
+  stopMonitors();
+  const old = ws;
+  ws = null;
+  if (old && (old.readyState === WebSocket.OPEN || old.readyState === WebSocket.CONNECTING)) {
+    try {
+      old.close(1000, "switch-room");
+    } catch (err) {}
+  }
+  statusDot.classList.remove("connected");
+  youNameEl.textContent = "";
+  myId = null;
+  myName = null;
+  closeAllConnections();
+  clearAllPeers();
+  reconnectAttempts = 0;
+  connect();
+}
+
+function openRoomSheet() {
+  roomCodeInput.value = "";
+  roomJoin.disabled = true;
+  updateRoomUi();
+  roomOverlay.classList.add("open");
+}
+
+function closeRoomSheet() {
+  roomOverlay.classList.remove("open");
+  roomCodeInput.blur();
+}
+
+function createRoom() {
+  switchRoom(generateRoomCode());
+  showToast("ルームを作成しました");
+}
+
+function joinRoom(raw) {
+  const code = normalizeRoomCode(raw);
+  if (!isValidRoomCode(code)) {
+    showToast("ルームコードが正しくありません", true);
+    return;
+  }
+  closeRoomSheet();
+  if (code === roomCode) return;
+  switchRoom(code);
+  showToast(`ルーム ${code} に参加しました`);
+}
+
+function leaveRoom() {
+  switchRoom(null);
+  closeRoomSheet();
+  showToast("ルームを退出しました");
+}
+
+roomChip.addEventListener("click", openRoomSheet);
+roomBtn.addEventListener("click", openRoomSheet);
+roomClose.addEventListener("click", closeRoomSheet);
+roomOverlay.addEventListener("click", (e) => {
+  if (e.target === roomOverlay) closeRoomSheet();
+});
+roomCreate.addEventListener("click", createRoom);
+roomLeave.addEventListener("click", leaveRoom);
+roomJoin.addEventListener("click", () => joinRoom(roomCodeInput.value));
+
+roomCodeInput.addEventListener("input", () => {
+  const code = normalizeRoomCode(roomCodeInput.value).slice(0, ROOM_CODE_LENGTH);
+  if (roomCodeInput.value !== code) roomCodeInput.value = code;
+  roomJoin.disabled = !isValidRoomCode(code);
+});
+
+roomCodeInput.addEventListener("keydown", (e) => {
+  if (e.isComposing || e.keyCode === 229) return;
+  if (e.key === "Enter" && !roomJoin.disabled) {
+    e.preventDefault();
+    joinRoom(roomCodeInput.value);
+  }
+});
+
+roomCodeDisplay.addEventListener("click", async () => {
+  if (!roomCode) return;
+  const ok = await copyText(roomCode);
+  showToast(ok ? "ルームコードをコピーしました" : "コピーできませんでした", !ok);
+});
+
+roomCopyLink.addEventListener("click", async () => {
+  if (!roomCode) return;
+  const ok = await copyText(inviteUrl(roomCode));
+  showToast(ok ? "招待リンクをコピーしました" : "コピーできませんでした", !ok);
+});
+
+roomShare.addEventListener("click", async () => {
+  if (!roomCode || typeof navigator.share !== "function") return;
+  try {
+    await navigator.share({
+      title: "SimpleDrop",
+      text: `SimpleDropのルーム ${roomCode} に参加してください`,
+      url: inviteUrl(roomCode)
+    });
+  } catch (err) {}
+});
+
+roomShowQr.addEventListener("click", openQr);
+
+bindSheetSwipeToClose(document.querySelector("#roomOverlay .sheet-header"), roomOverlay.querySelector(".sheet"), closeRoomSheet);
+
 ["dragover", "drop"].forEach((type) => {
   window.addEventListener(type, (e) => {
     if (e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")) e.preventDefault();
   });
 });
+
+const initialRoomParam = new URLSearchParams(location.search).get("room");
+if (initialRoomParam !== null) {
+  const initialCode = normalizeRoomCode(initialRoomParam);
+  if (isValidRoomCode(initialCode)) {
+    roomCode = initialCode;
+  } else {
+    showToast("招待リンクのルームコードが正しくありません", true);
+  }
+  syncLocation();
+}
+updateRoomUi();
 
 if (!document.hidden) connect();
 

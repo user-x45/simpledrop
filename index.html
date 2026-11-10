@@ -79,6 +79,8 @@
   }
 
   body {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
     height: 100vh;
     height: 100dvh;
     display: flex;
@@ -666,6 +668,10 @@
 
   .sheet {
     width: 100%;
+    max-height: 94vh;
+    max-height: 94dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     max-width: 560px;
     background: var(--panel);
     border-top-left-radius: 24px;
@@ -905,7 +911,8 @@
   .alert-box {
     width: 100%;
     max-width: 480px;
-    max-height: 82vh;
+    max-height: 90vh;
+    max-height: 90dvh;
     display: flex;
     flex-direction: column;
     background: var(--panel);
@@ -1045,7 +1052,10 @@
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.25s ease, transform 0.25s ease;
-    white-space: nowrap;
+    white-space: normal;
+    text-align: center;
+    max-width: calc(100% - 32px);
+    width: max-content;
   }
 
   .toast.show {
@@ -1087,6 +1097,67 @@
     header { padding-top: 12px; }
     #log { max-height: 150px; }
   }
+
+  @media (max-width: 360px) {
+    header { padding-left: 12px; padding-right: 12px; }
+    header h1 { font-size: 22px; gap: 8px; }
+    header h1 .site-icon { font-size: 22px; }
+    .install-label { display: none; }
+    .install-btn { padding: 10px 14px; }
+    .status-row { padding: 6px 10px; gap: 6px; font-size: 13px; }
+    .you-name { padding: 4px 10px; }
+    .name-input { width: 120px; }
+    .transfer-warning { width: calc(100% - 24px); font-size: 13px; padding: 10px 12px; }
+    main { padding: 6px 10px; }
+    #log { padding-left: 12px; padding-right: 12px; }
+    .transfer-card { gap: 10px; padding: 10px 48px 10px 10px; }
+    .transfer-icon { width: 48px; height: 48px; }
+    .transfer-info .fname { font-size: 15px; }
+    .transfer-info .fmeta { font-size: 13px; }
+    .dl-btn { padding: 10px 12px; font-size: 14px; }
+    .sheet { padding-left: 16px; padding-right: 16px; }
+    .sheet h2 { font-size: 19px; }
+    .sheet-tab { font-size: 14px; }
+    .sheet-tab i { margin-right: 4px; }
+    .alert-overlay { padding: 12px; }
+    .alert-box { padding: 16px 14px 14px; }
+    .alert-body { font-size: 16px; }
+    .alert-btn { font-size: 15px; }
+    .msg-foot { flex-wrap: wrap; }
+    .send-btn { flex: 1; }
+  }
+
+  @media (max-width: 360px), (max-height: 600px) {
+    .peer-node { width: 96px; height: 96px; margin-left: -48px; margin-top: -48px; }
+    .peer-node .peer-name { font-size: 13px; line-height: 1.25; }
+    .peer-node .glow { width: 8px; height: 8px; }
+    .empty-hint { font-size: 15px; gap: 14px; }
+    .qr-btn { padding: 10px 18px; font-size: 15px; }
+  }
+
+  @media (max-height: 600px) {
+    header { padding-top: calc(8px + env(safe-area-inset-top, 0px)); gap: 2px; }
+    header h1 { font-size: 20px; }
+    header h1 .site-icon { font-size: 20px; }
+    .status-row { margin-top: 2px; padding: 4px 10px; font-size: 13px; }
+    .transfer-warning { padding: 6px 12px; font-size: 13px; }
+    #log { max-height: 30vh; gap: 8px; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+    .sheet { padding-top: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+    .sheet h2 { font-size: 18px; margin-bottom: 4px; }
+    .sheet p.desc { margin-bottom: 10px; font-size: 14px; }
+    .sheet-tabs { margin-bottom: 10px; }
+    .sheet-tab { padding: 8px; min-height: 44px; }
+    .drop-zone { padding: 18px 16px; }
+    .drop-zone .dz-icon { font-size: 28px; margin-bottom: 4px; }
+    .drop-zone .dz-text { font-size: 16px; }
+    .msg-input { min-height: 80px; padding: 10px 12px; font-size: 16px; }
+    .sheet-close { margin-top: 10px; padding: 10px; }
+    .qr-box { padding: 10px; margin-bottom: 10px; }
+    .qr-sheet .desc { margin-bottom: 10px; }
+    .qr-url { margin-bottom: 10px; }
+    .alert-head { margin-bottom: 8px; }
+    .alert-actions { margin-top: 10px; }
+  }
 </style>
 </head>
 <body>
@@ -1095,7 +1166,7 @@
   <h1>
     <i class="fa-solid fa-arrow-up-from-bracket site-icon" aria-hidden="true"></i>
     <span>SimpleDrop</span>
-    <button class="install-btn" id="installBtn" hidden><i class="fa-solid fa-download"></i> インストール</button>
+    <button class="install-btn" id="installBtn" hidden><i class="fa-solid fa-download"></i><span class="install-label">インストール</span></button>
   </h1>
   <p>同じネットワークの端末が表示されます。<strong>タップ</strong>でファイル、<strong>長押し</strong>でメッセージを送れます。</p>
   <div class="status-row">
@@ -1699,6 +1770,7 @@ function removePeer(id) {
 }
 
 function nodeSize() {
+  if (window.innerWidth <= 360 || window.innerHeight <= 600) return 96;
   return window.innerWidth <= 480 ? 112 : 136;
 }
 
@@ -1710,7 +1782,7 @@ function pickPosition() {
   const minX = half + 6;
   const maxX = Math.max(w - half - 6, minX);
   const minY = half + 14;
-  const maxY = Math.max(h - half - 64, minY);
+  const maxY = Math.max(h - half - (h < 300 ? 48 : 64), minY);
   const minDist = size + 8;
 
   let best = null;

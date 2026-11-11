@@ -310,16 +310,33 @@
     transform: scale(0.96);
   }
 
-  .broadcast-btn {
+  .peer-grid {
+    --node-size: 136px;
     position: absolute;
-    left: 50%;
-    bottom: 0;
-    transform: translateX(-50%);
-    z-index: 2;
-    white-space: nowrap;
+    inset: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(calc(var(--node-size) + 8px), 1fr));
+    grid-auto-rows: max-content;
+    justify-items: center;
+    align-content: start;
+    gap: 12px;
+    padding: 10px 4px 12px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
-  .broadcast-btn[hidden] { display: none; }
+  .peer-grid::-webkit-scrollbar { display: none; }
+
+  .peer-grid[hidden] { display: none; }
+
+  .peer-node.in-grid {
+    position: relative;
+    left: auto;
+    top: auto;
+    margin: 0;
+  }
 
   .cancel-btn {
     background: var(--panel-raised);
@@ -1040,8 +1057,8 @@
   .toast {
     position: fixed;
     left: 50%;
-    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
-    transform: translate(-50%, 20px);
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    transform: translate(-50%, -20px);
     background: var(--panel-raised);
     color: var(--text);
     border: 1px solid var(--accent-dim);
@@ -1235,6 +1252,7 @@
     .empty-hint { font-size: 16px; }
     .peer-node { width: 112px; height: 112px; margin-left: -56px; margin-top: -56px; }
     .peer-node .peer-name { font-size: 15px; }
+    .peer-grid { --node-size: 112px; }
   }
 
   @media (max-height: 640px) {
@@ -1274,6 +1292,7 @@
 
   @media (max-width: 360px), (max-height: 600px) {
     .peer-node { width: 96px; height: 96px; margin-left: -48px; margin-top: -48px; }
+    .peer-grid { --node-size: 96px; }
     .peer-node .peer-name { font-size: 13px; line-height: 1.25; }
     .peer-node .glow { width: 8px; height: 8px; }
     .empty-hint { font-size: 15px; gap: 14px; }
@@ -1361,7 +1380,7 @@
         <button class="qr-btn" id="qrBtn" type="button"><i class="fa-solid fa-qrcode"></i>QRコードを表示</button>
       </div>
     </div>
-    <button class="qr-btn broadcast-btn" id="broadcastBtn" type="button" hidden><i class="fa-solid fa-users"></i>全員に送る</button>
+    <div class="peer-grid" id="peerGrid" hidden></div>
   </div>
 </main>
 
@@ -1524,6 +1543,7 @@ const peers = new Map();
 const peerNodeEls = new Map();
 let activeTargetId = null;
 let lastFocusEl = null;
+let gridMode = false;
 
 const statusDot = document.getElementById("statusDot");
 const statusText = document.getElementById("statusText");
@@ -1590,10 +1610,10 @@ youNameEl.addEventListener("keydown", (e) => {
   }
 });
 const field = document.getElementById("field");
+const peerGrid = document.getElementById("peerGrid");
 const emptyHint = document.getElementById("emptyHint");
 const logEl = document.getElementById("log");
 const qrBtn = document.getElementById("qrBtn");
-const broadcastBtn = document.getElementById("broadcastBtn");
 const qrOverlay = document.getElementById("qrOverlay");
 const qrClose = document.getElementById("qrClose");
 const qrBox = document.getElementById("qrBox");
@@ -1970,17 +1990,12 @@ function handleSignalingMessage(data) {
   }
 }
 
-function updateBroadcast() {
-  broadcastBtn.hidden = peers.size < 2;
-  if (peers.size < 2 && activeTargetId === "all") closeUploadSheet();
-}
-
 function addPeer(id, name) {
   if (peers.has(id)) return;
   peers.set(id, { id, name });
   renderPeerNode(id, name);
   emptyHint.style.display = "none";
-  updateBroadcast();
+  layoutPeers();
 }
 
 function renamePeer(id, name) {
@@ -2000,13 +2015,13 @@ function renamePeer(id, name) {
 function removePeer(id) {
   peers.delete(id);
   if (activeTargetId === id) closeUploadSheet();
-  updateBroadcast();
   const el = peerNodeEls.get(id);
   if (el) {
     el.classList.add("leaving");
     setTimeout(() => el.remove(), 500);
     peerNodeEls.delete(id);
   }
+  layoutPeers();
   if (peers.size === 0) {
     emptyHint.style.display = "flex";
   }
@@ -2048,6 +2063,7 @@ function pickPosition() {
     const y = minY + Math.random() * (maxY - minY);
     let nearest = Infinity;
     peerNodeEls.forEach((other) => {
+      if (!other.style.left) return;
       const ox = parseFloat(other.style.left);
       const oy = parseFloat(other.style.top);
       nearest = Math.min(nearest, Math.hypot(x - ox, y - oy));
@@ -2061,15 +2077,53 @@ function pickPosition() {
   return best;
 }
 
+function freeCapacity() {
+  const cell = nodeSize() + 16;
+  const cols = Math.max(1, Math.floor((field.clientWidth || 560) / cell));
+  const rows = Math.max(1, Math.floor(((field.clientHeight || 420) - 64) / cell));
+  return Math.max(3, Math.floor(cols * rows * 0.75));
+}
+
+function placeNode(el) {
+  if (gridMode) {
+    el.style.left = "";
+    el.style.top = "";
+    el.classList.add("in-grid");
+    peerGrid.appendChild(el);
+    return;
+  }
+  el.classList.remove("in-grid");
+  const pos = pickPosition();
+  el.style.left = pos.x + "px";
+  el.style.top = pos.y + "px";
+  field.appendChild(el);
+}
+
+function layoutPeers() {
+  const next = peers.size > freeCapacity();
+  if (next === gridMode) return;
+  gridMode = next;
+  peerGrid.hidden = !gridMode;
+  const nodes = Array.from(peerNodeEls.values());
+  nodes.forEach((el) => {
+    el.style.left = "";
+    el.style.top = "";
+  });
+  nodes.forEach((el) => placeNode(el));
+}
+
+let layoutTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(layoutTimer);
+  layoutTimer = setTimeout(layoutPeers, 150);
+});
+
 function renderPeerNode(id, name) {
   const el = document.createElement("div");
   el.className = "peer-node";
   el.setAttribute("role", "button");
   el.tabIndex = 0;
   el.setAttribute("aria-label", `${name}に送信`);
-  const pos = pickPosition();
-  el.style.left = pos.x + "px";
-  el.style.top = pos.y + "px";
   el.style.setProperty("--drift-delay", (Math.random() * 3) + "s");
   el.innerHTML = '<div class="glow"></div><div class="peer-name"></div>';
   const nameEl = el.querySelector(".peer-name");
@@ -2087,8 +2141,8 @@ function renderPeerNode(id, name) {
     nameEl.appendChild(document.createTextNode(line));
   });
   bindPeerGestures(el, id, name);
-  field.appendChild(el);
   peerNodeEls.set(id, el);
+  placeNode(el);
 }
 
 const LONG_PRESS_MS = 500;
@@ -2221,8 +2275,6 @@ msgInput.addEventListener("keydown", (e) => {
   }
 });
 
-broadcastBtn.addEventListener("click", () => openSheet("all", "全員", "file"));
-
 document.addEventListener("paste", (e) => {
   if (!overlay.classList.contains("open") || !activeTargetId) return;
   const files = Array.from((e.clipboardData && e.clipboardData.files) || []);
@@ -2239,7 +2291,7 @@ function submitMessage() {
   const text = msgInput.value.replace(/\r\n/g, "\n").replace(/\s+$/, "");
   if (!text.trim() || !activeTargetId) return;
   const targetId = activeTargetId;
-  const targetName = targetId === "all" ? "全員" : (peers.get(targetId)?.name || "端末");
+  const targetName = peers.get(targetId)?.name || "端末";
   sendMessage(targetId, text)
     .then(() => showToast(`${targetName}に送信しました`))
     .catch(() => showToast("送信できませんでした", true));
@@ -2409,9 +2461,6 @@ async function sendFile(peerId, file) {
 const sendQueues = new Map();
 
 function sendFiles(peerId, files) {
-  if (peerId === "all") {
-    return Promise.all(Array.from(peers.keys()).map((id) => sendFiles(id, files)));
-  }
   const prev = sendQueues.get(peerId) || Promise.resolve();
   const next = prev.then(async () => {
     for (const file of files) {
@@ -2431,11 +2480,6 @@ function setProgress(card, fill, pct) {
 }
 
 async function sendMessage(peerId, text) {
-  if (peerId === "all") {
-    const results = await Promise.allSettled(Array.from(peers.keys()).map((id) => sendMessage(id, text)));
-    if (results.length === 0 || results.every((x) => x.status === "rejected")) throw new Error("failed");
-    return;
-  }
   const entry = await ensureChannel(peerId);
   entry.dataChannel.send(JSON.stringify({ message: true, text, sentAt: Date.now() }));
 }
